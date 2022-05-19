@@ -19,6 +19,26 @@ type Namespace struct {
 	Name string
 }
 
+type KubernetesService struct {
+	kubeClient *kubernetes.Cluster
+}
+
+func NewKubernetesService(kubeClient *kubernetes.Cluster) *KubernetesService {
+	return &KubernetesService{kubeClient}
+}
+
+// Exists checks if the named epinio-controlled namespace exists or
+// not, and returns an appropriate boolean flag
+func (srv *KubernetesService) Exists(ctx context.Context, lookupNamespace string) (bool, error) {
+	return Exists(ctx, srv.kubeClient, lookupNamespace)
+}
+
+// Create generates a new epinio-controlled namespace, i.e. a kube
+// namespace plus a configuration account.
+func (srv *KubernetesService) Create(ctx context.Context, namespace string) error {
+	return Create(ctx, srv.kubeClient, namespace)
+}
+
 func List(ctx context.Context, kubeClient *kubernetes.Cluster) ([]Namespace, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: kubernetes.EpinioNamespaceLabelKey + "=" + kubernetes.EpinioNamespaceLabelValue,

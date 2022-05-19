@@ -49,118 +49,162 @@ func errorHandler(action APIActionFunc) gin.HandlerFunc {
 	}
 }
 
-func get(path string, h gin.HandlerFunc) routes.Route {
-	return routes.NewRoute("GET", path, h)
+func get(name, path string, h gin.HandlerFunc) routes.Route {
+	return routes.NewRoute(name, "GET", path, h)
 }
 
-func post(path string, h gin.HandlerFunc) routes.Route {
-	return routes.NewRoute("POST", path, h)
+func post(name, path string, h gin.HandlerFunc) routes.Route {
+	return routes.NewRoute(name, "POST", path, h)
 }
 
-func delete(path string, h gin.HandlerFunc) routes.Route {
-	return routes.NewRoute("DELETE", path, h)
+func delete(name, path string, h gin.HandlerFunc) routes.Route {
+	return routes.NewRoute(name, "DELETE", path, h)
 }
 
-func patch(path string, h gin.HandlerFunc) routes.Route {
-	return routes.NewRoute("PATCH", path, h)
+func patch(name, path string, h gin.HandlerFunc) routes.Route {
+	return routes.NewRoute(name, "PATCH", path, h)
 }
 
-func put(path string, h gin.HandlerFunc) routes.Route {
-	return routes.NewRoute("PUT", path, h)
+func put(name, path string, h gin.HandlerFunc) routes.Route {
+	return routes.NewRoute(name, "PUT", path, h)
 }
 
 // AdminRoutes is the list of restricted routes, only accessible by admins
 var AdminRoutes map[string]struct{} = map[string]struct{}{}
 
-var Routes = routes.NamedRoutes{
-	"Info":      get("/info", errorHandler(Info)),
-	"AuthToken": get("/authtoken", errorHandler(AuthToken)),
+var Routes = routes.NamedRoutes{}
+
+var WsRoutes = routes.NamedRoutes{}
+
+func MakeRoutes() []routes.Route {
+	routes := []routes.Route{}
+
+	routes = append(routes, get("Info", "/info", errorHandler(Info)))
+	routes = append(routes, get("AuthToken", "/authtoken", errorHandler(AuthToken)))
 
 	// app controller files see application/*.go
 
-	"AllApps":         get("/applications", errorHandler(application.Controller{}.FullIndex)),
-	"Apps":            get("/namespaces/:namespace/applications", errorHandler(application.Controller{}.Index)),
-	"AppCreate":       post("/namespaces/:namespace/applications", errorHandler(application.Controller{}.Create)),
-	"AppShow":         get("/namespaces/:namespace/applications/:app", errorHandler(application.Controller{}.Show)),
-	"StagingComplete": get("/namespaces/:namespace/staging/:stage_id/complete", errorHandler(application.Controller{}.Staged)), // See stage.go
-	"AppDelete":       delete("/namespaces/:namespace/applications/:app", errorHandler(application.Controller{}.Delete)),
-	"AppUpload":       post("/namespaces/:namespace/applications/:app/store", errorHandler(application.Controller{}.Upload)), // See upload.go
-	"AppImportGit":    post("/namespaces/:namespace/applications/:app/import-git", errorHandler(application.Controller{}.ImportGit)),
-	"AppStage":        post("/namespaces/:namespace/applications/:app/stage", errorHandler(application.Controller{}.Stage)), // See stage.go
-	"AppDeploy":       post("/namespaces/:namespace/applications/:app/deploy", errorHandler(application.Controller{}.Deploy)),
-	"AppRestart":      post("/namespaces/:namespace/applications/:app/restart", errorHandler(application.Controller{}.Restart)),
-	"AppUpdate":       patch("/namespaces/:namespace/applications/:app", errorHandler(application.Controller{}.Update)),
-	"AppRunning":      get("/namespaces/:namespace/applications/:app/running", errorHandler(application.Controller{}.Running)),
-	"AppPart":         get("/namespaces/:namespace/applications/:app/part/:part", errorHandler(application.Controller{}.GetPart)),
+	appController := application.Controller{}
+
+	routes = append(routes, get("AllApps", "/applications", errorHandler(appController.FullIndex)))
+	routes = append(routes, get("Apps", "/namespaces/:namespace/applications", errorHandler(appController.Index)))
+	routes = append(routes, post("AppCreate", "/namespaces/:namespace/applications", errorHandler(appController.Create)))
+	routes = append(routes, get("AppShow", "/namespaces/:namespace/applications/:app", errorHandler(appController.Show)))
+	// See stage.go
+	routes = append(routes, get("StagingComplete", "/namespaces/:namespace/staging/:stage_id/complete", errorHandler(appController.Staged)))
+	routes = append(routes, delete("AppDelete", "/namespaces/:namespace/applications/:app", errorHandler(appController.Delete)))
+	// See upload.go
+	routes = append(routes, post("AppUpload", "/namespaces/:namespace/applications/:app/store", errorHandler(appController.Upload)))
+	routes = append(routes, post("AppImportGit", "/namespaces/:namespace/applications/:app/import-git", errorHandler(appController.ImportGit)))
+	// See stage.go
+	routes = append(routes, post("AppStage", "/namespaces/:namespace/applications/:app/stage", errorHandler(appController.Stage)))
+	routes = append(routes, post("AppDeploy", "/namespaces/:namespace/applications/:app/deploy", errorHandler(appController.Deploy)))
+	routes = append(routes, post("AppRestart", "/namespaces/:namespace/applications/:app/restart", errorHandler(appController.Restart)))
+	routes = append(routes, patch("AppUpdate", "/namespaces/:namespace/applications/:app", errorHandler(appController.Update)))
+	routes = append(routes, get("AppRunning", "/namespaces/:namespace/applications/:app/running", errorHandler(appController.Running)))
+	routes = append(routes, get("AppPart", "/namespaces/:namespace/applications/:app/part/:part", errorHandler(appController.GetPart)))
+
+	// environment
+	envController := env.Controller{}
 
 	// See env.go
-	"EnvList": get("/namespaces/:namespace/applications/:app/environment", errorHandler(env.Controller{}.Index)),
+	routes = append(routes, get("EnvList", "/namespaces/:namespace/applications/:app/environment", errorHandler(envController.Index)))
 
 	// Note, the second registration catches calls with an empty pattern!
-	"EnvMatch":  get("/namespaces/:namespace/applications/:app/environmentmatch/:pattern", errorHandler(env.Controller{}.Match)),
-	"EnvMatch0": get("/namespaces/:namespace/applications/:app/environmentmatch", errorHandler(env.Controller{}.Match)),
+	routes = append(routes, get("EnvMatch", "/namespaces/:namespace/applications/:app/environmentmatch/:pattern", errorHandler(envController.Match)))
+	routes = append(routes, get("EnvMatch0", "/namespaces/:namespace/applications/:app/environmentmatch", errorHandler(envController.Match)))
 
-	"EnvSet":   post("/namespaces/:namespace/applications/:app/environment", errorHandler(env.Controller{}.Set)),
-	"EnvShow":  get("/namespaces/:namespace/applications/:app/environment/:env", errorHandler(env.Controller{}.Show)),
-	"EnvUnset": delete("/namespaces/:namespace/applications/:app/environment/:env", errorHandler(env.Controller{}.Unset)),
+	routes = append(routes, post("EnvSet", "/namespaces/:namespace/applications/:app/environment", errorHandler(envController.Set)))
+	routes = append(routes, get("EnvShow", "/namespaces/:namespace/applications/:app/environment/:env", errorHandler(envController.Show)))
+	routes = append(routes, delete("EnvUnset", "/namespaces/:namespace/applications/:app/environment/:env", errorHandler(envController.Unset)))
+
+	// configuration binding
+	configBindController := configurationbinding.Controller{}
 
 	// Bind and unbind configurations to/from applications, by means of configurationbindings in applications
-	"ConfigurationBindingCreate": post("/namespaces/:namespace/applications/:app/configurationbindings",
-		errorHandler(configurationbinding.Controller{}.Create)),
-	"ConfigurationBindingDelete": delete("/namespaces/:namespace/applications/:app/configurationbindings/:configuration",
-		errorHandler(configurationbinding.Controller{}.Delete)),
+	routes = append(routes,
+		post(
+			"ConfigurationBindingCreate",
+			"/namespaces/:namespace/applications/:app/configurationbindings",
+			errorHandler(configBindController.Create),
+		),
+	)
+	routes = append(routes,
+		delete(
+			"ConfigurationBindingDelete",
+			"/namespaces/:namespace/applications/:app/configurationbindings/:configuration",
+			errorHandler(configBindController.Delete),
+		),
+	)
 
-	// List, create, show and delete namespaces
-	"Namespaces":      get("/namespaces", errorHandler(namespace.Controller{}.Index)),
-	"NamespaceCreate": post("/namespaces", errorHandler(namespace.Controller{}.Create)),
-	"NamespaceDelete": delete("/namespaces/:namespace", errorHandler(namespace.Controller{}.Delete)),
-	"NamespaceShow":   get("/namespaces/:namespace", errorHandler(namespace.Controller{}.Show)),
-
-	// Note, the second registration catches calls with an empty pattern!
-	"NamespacesMatch":  get("/namespacematches/:pattern", errorHandler(namespace.Controller{}.Match)),
-	"NamespacesMatch0": get("/namespacematches", errorHandler(namespace.Controller{}.Match)),
+	// configuration
+	configController := configuration.Controller{}
 
 	// List, show, create and delete configurations
-	"ConfigurationApps": get("/namespaces/:namespace/configurationapps", errorHandler(configuration.Controller{}.ConfigurationApps)),
+	routes = append(routes, get("ConfigurationApps", "/namespaces/:namespace/configurationapps", errorHandler(configController.ConfigurationApps)))
 	//
-	"AllConfigurations":    get("/configurations", errorHandler(configuration.Controller{}.FullIndex)),
-	"Configurations":       get("/namespaces/:namespace/configurations", errorHandler(configuration.Controller{}.Index)),
-	"ConfigurationShow":    get("/namespaces/:namespace/configurations/:configuration", errorHandler(configuration.Controller{}.Show)),
-	"ConfigurationCreate":  post("/namespaces/:namespace/configurations", errorHandler(configuration.Controller{}.Create)),
-	"ConfigurationDelete":  delete("/namespaces/:namespace/configurations/:configuration", errorHandler(configuration.Controller{}.Delete)),
-	"ConfigurationUpdate":  patch("/namespaces/:namespace/configurations/:configuration", errorHandler(configuration.Controller{}.Update)),
-	"ConfigurationReplace": put("/namespaces/:namespace/configurations/:configuration", errorHandler(configuration.Controller{}.Replace)),
+	routes = append(routes, get("AllConfigurations", "/configurations", errorHandler(configController.FullIndex)))
+	routes = append(routes, get("Configurations", "/namespaces/:namespace/configurations", errorHandler(configController.Index)))
+	routes = append(routes, get("ConfigurationShow", "/namespaces/:namespace/configurations/:configuration", errorHandler(configController.Show)))
+	routes = append(routes, post("ConfigurationCreate", "/namespaces/:namespace/configurations", errorHandler(configController.Create)))
+	routes = append(routes, delete("ConfigurationDelete", "/namespaces/:namespace/configurations/:configuration", errorHandler(configController.Delete)))
+	routes = append(routes, patch("ConfigurationUpdate", "/namespaces/:namespace/configurations/:configuration", errorHandler(configController.Update)))
+	routes = append(routes, put("ConfigurationReplace", "/namespaces/:namespace/configurations/:configuration", errorHandler(configController.Replace)))
 
 	// Services
-	"ServiceCatalog":     get("/services", errorHandler(service.Controller{}.Catalog)),
-	"ServiceCatalogShow": get("/services/:catalogservice", errorHandler(service.Controller{}.CatalogShow)),
-	"ServiceCreate":      post("/namespaces/:namespace/services", errorHandler(service.Controller{}.Create)),
-	"ServiceList":        get("/namespaces/:namespace/services", errorHandler(service.Controller{}.List)),
-	"ServiceShow":        get("/namespaces/:namespace/services/:service", errorHandler(service.Controller{}.Show)),
-	"ServiceDelete":      delete("/namespaces/:namespace/services/:service", errorHandler(service.Controller{}.Delete)),
+	serviceController := service.Controller{}
+
+	routes = append(routes, get("ServiceCatalog", "/services", errorHandler(serviceController.Catalog)))
+	routes = append(routes, get("ServiceCatalogShow", "/services/:catalogservice", errorHandler(serviceController.CatalogShow)))
+	routes = append(routes, post("ServiceCreate", "/namespaces/:namespace/services", errorHandler(serviceController.Create)))
+	routes = append(routes, get("ServiceList", "/namespaces/:namespace/services", errorHandler(serviceController.List)))
+	routes = append(routes, get("ServiceShow", "/namespaces/:namespace/services/:service", errorHandler(serviceController.Show)))
+	routes = append(routes, delete("ServiceDelete", "/namespaces/:namespace/services/:service", errorHandler(serviceController.Delete)))
 
 	// Bind a service to/from applications
-	"ServiceBind": post(
-		"/namespaces/:namespace/services/:service/bind",
-		errorHandler(service.Controller{}.Bind)),
+	routes = append(routes, post("ServiceBind", "/namespaces/:namespace/services/:service/bind", errorHandler(serviceController.Bind)))
 
 	// Unbind a service to/from applications
-	"ServiceUnbind": post(
-		"/namespaces/:namespace/services/:service/unbind",
-		errorHandler(service.Controller{}.Unbind)),
+	routes = append(routes, post("ServiceUnbind", "/namespaces/:namespace/services/:service/unbind", errorHandler(serviceController.Unbind)))
 
 	// App charts
-	"ChartList":   get("/appcharts", errorHandler(appchart.Controller{}.Index)),
-	"ChartMatch":  get("/appchartsmatch/:pattern", errorHandler(appchart.Controller{}.Match)),
-	"ChartMatch0": get("/appchartsmatch", errorHandler(appchart.Controller{}.Match)),
-	"ChartShow":   get("/appcharts/:name", errorHandler(appchart.Controller{}.Show)),
+	appchartController := appchart.Controller{}
+
+	routes = append(routes, get("ChartList", "/appcharts", errorHandler(appchartController.Index)))
+	routes = append(routes, get("ChartMatch", "/appchartsmatch/:pattern", errorHandler(appchartController.Match)))
+	routes = append(routes, get("ChartMatch0", "/appchartsmatch", errorHandler(appchartController.Match)))
+	routes = append(routes, get("ChartShow", "/appcharts/:name", errorHandler(appchartController.Show)))
+
+	return routes
 }
 
-var WsRoutes = routes.NamedRoutes{
-	"AppExec":        get("/namespaces/:namespace/applications/:app/exec", errorHandler(application.Controller{}.Exec)),
-	"AppPortForward": get("/namespaces/:namespace/applications/:app/portforward", errorHandler(application.Controller{}.PortForward)),
-	"AppLogs":        get("/namespaces/:namespace/applications/:app/logs", application.Controller{}.Logs),
-	"StagingLogs":    get("/namespaces/:namespace/staging/:stage_id/logs", application.Controller{}.Logs),
+func MakeNamespaceRoutes(controller *namespace.Controller) []routes.Route {
+	routes := []routes.Route{}
+
+	// List, create, show and delete namespaces
+	routes = append(routes, get("Namespaces", "/namespaces", errorHandler(controller.Index)))
+	routes = append(routes, post("NamespaceCreate", "/namespaces", errorHandler(controller.Create)))
+	routes = append(routes, delete("NamespaceDelete", "/namespaces/:namespace", errorHandler(controller.Delete)))
+	routes = append(routes, get("NamespaceShow", "/namespaces/:namespace", errorHandler(controller.Show)))
+
+	// Note, the second registration catches calls with an empty pattern!
+	routes = append(routes, get("NamespacesMatch", "/namespacematches/:pattern", errorHandler(controller.Match)))
+	routes = append(routes, get("NamespacesMatch0", "/namespacematches", errorHandler(controller.Match)))
+
+	return routes
+}
+
+func MakeWsRoutes() []routes.Route {
+	routes := []routes.Route{}
+
+	appController := application.Controller{}
+
+	routes = append(routes, get("AppExec", "/namespaces/:namespace/applications/:app/exec", errorHandler(appController.Exec)))
+	routes = append(routes, get("AppPortForward", "/namespaces/:namespace/applications/:app/portforward", errorHandler(appController.PortForward)))
+	routes = append(routes, get("AppLogs", "/namespaces/:namespace/applications/:app/logs", appController.Logs))
+	routes = append(routes, get("StagingLogs", "/namespaces/:namespace/staging/:stage_id/logs", appController.Logs))
+
+	return routes
 }
 
 // Lemon extends the specified router with the methods and urls
